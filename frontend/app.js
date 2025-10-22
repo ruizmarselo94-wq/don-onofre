@@ -1,5 +1,5 @@
 // frontend/app.js
-const API_BASE = "don-onofre-production.up.railway.app";
+const API_BASE = "https://don-onofre-production.up.railway.app";
 const CUSTOMER_ID = 1; // demo
 
 let PRODUCTS = [];
