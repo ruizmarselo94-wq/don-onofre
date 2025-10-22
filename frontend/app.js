@@ -1,5 +1,5 @@
 // frontend/app.js
-const API_BASE = "http://127.0.0.1:8000";
+const API_BASE = "don-onofre-production.up.railway.app";
 const CUSTOMER_ID = 1; // demo
 
 let PRODUCTS = [];
