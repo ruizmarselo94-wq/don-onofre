@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="es">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Don Onofre - Tienda</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+
+<body>
+  <header>
+    <h1>Don Onofre — Tienda</h1>
+    <div class="muted header-subtext">API: FastAPI · AdamsPay (simulador)</div>
+  </header>
+
+  <main class="wrap">
+    <section class="products" id="products"></section>
+
+    <aside class="cart">
+      <div class="cart-card">
+        <div class="cart-card__header">
+          <h3>
+            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false"
+              style="vertical-align:middle;margin-right:8px">
+              <path fill="currentColor"
+                d="M7 4h-2l-1 2H2v2h1l3.6 7.59-1.35 2.45A1 1 0 0 0 5.99 19h12.02v-2H6.42c.07-.12.12-.25.15-.38L7.1 15h7.45a1 1 0 0 0 .95-.68l1.6-5.2A1 1 0 0 0 16.3 8H6.21l-.94-2zM7 20a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z" />
+            </svg>
+            Carrito
+          </h3>
+          <div class="cart-badge" id="cartCount">0</div>
+        </div>
+
+        <div class="cart-items" id="cartItems">
+          <div class="muted small">Carrito vacío</div>
+        </div>
+
+        <div class="cart-card__footer">
+          <div class="info" id="orderInfo" style="display:none;">
+            <div><strong>Orden #</strong> <span id="orderId">—</span></div>
+            <div><strong>Total:</strong> <span id="orderTotal">—</span></div>
+            <div><strong>Estado:</strong> <span id="orderStatus">—</span></div>
+
+            <div style="grid-column: 1 / -1; margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
+              <a id="paymentLink" href="#" target="_blank" class="btn btn-primary" style="display:none">Ir a pagar</a>
+              <button id="btnCheck" class="btn btn-outline" style="display:none">Verificar estado</button>
+              <button id="btnNew" class="btn btn-outline" style="display:none">Nueva compra</button>
+            </div>
+          </div>
+
+          <div class="cart-total">
+            <div class="small muted">Total:</div>
+            <div id="cartTotal" style="font-weight:800">0</div>
+          </div>
+
+          <div class="cart-footer-sep" aria-hidden="true"></div>
+
+          <div class="cart-buttons">
+            <button id="btnCheckout" class="btn btn-primary" disabled>Finalizar compra</button>
+            <button id="btnClear" class="btn btn-outline">Limpiar</button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  </main>
+
+  <footer>
+    Implementación de prueba — Don Onofre. Usar el cliente con customer_id = 1 (demo).
+  </footer>
+
+  <!-- Modal de pago -->
+  <div id="paymentModal">
+    <div>
+      <iframe id="paymentFrame"></iframe>
+      <button id="closePaymentModal">Cerrar</button>
+    </div>
+  </div>
+
+  <script src="/static/app.js"></script>
+</body>
+
+</html>
