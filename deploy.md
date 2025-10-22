@@ -1,39 +1,35 @@
-# Despliegue backend Don Onofre (SQLite)
+# don-onofre - Backend (Desafío AdamsPay)
 
-## Variables de entorno
-Crea un archivo `.env` en `backend/` con estas variables:
+## Descripción
+API REST para tienda online de Don Onofre. Permite listar productos, crear órdenes y generar enlaces de pago usando AdamsPay (sandbox). La base de datos SQLite (`dononofre.db`) incluye productos gastronómicos y clientes de ejemplo.
 
-DATABASE_URL=sqlite:///./dononofre.db
-ADAMSPAY_BASE_URL=https://sandbox.adamspay.com
-ADAMSPAY_API_KEY=TU_API_KEY_DE_PRUEBA
-SECRET_KEY=clave_secreta_local
-PORT=8000
+Actualmente desplegado en Railway usando SQLite.
 
-## 1) Levantar local (desarrollo)
-1. Activar virtualenv:
-.\venv\Scripts\Activate.ps1
+## Tecnologías
+- Python 3.11.8
+- FastAPI
+- SQLAlchemy
+- Alembic
+- SQLite
+- Uvicorn
+- AdamsPay sandbox
 
-2. Instalar dependencias:
-pip install -r requirements.txt
+## Requisitos
+- Python 3.11+
+- pip
 
-3. Inicializar y seedear DB:
-python -m app.init_db
+## Instalación y ejecución
+git clone <TU_REPO> don-onofre
+cd don-onofre/backend
 
-   Esto crea o resetea `dononofre.db` con productos y clientes de ejemplo.
+python -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
-4. Levantar servidor:
-uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+Documentación API: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 
-5. Documentación automática:
-OpenAPI: http://127.0.0.1:8000/docs
-
-## 2) Pruebas AdamsPay
-- Usa sandbox de AdamsPay con ADAMSPAY_API_KEY.
-- Webhook de pagos: /api/payments/webhook
-- Crea órdenes y verifica que se genere el link de pago.
-- Usa ngrok si pruebas desde local para exponer la URL.
-
-## 3) Notas
-- SQLite es suficiente para desarrollo y prueba.
-- Para producción con alta concurrencia, considerar Postgres u otra DB.
-- Logs se ven en consola (uvicorn) o en contenedor Docker si se usa.
+## Endpoints principales
+- GET /api/products
+- GET /api/products/{id}
+- POST /api/orders
+- GET /api/orders/{id}
+- POST /api/payments/create
+- POST /api/payments/webhook
