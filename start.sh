@@ -1,12 +1,14 @@
 #!/bin/bash
-# instalar pip y dependencias
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+cd backend
 
-# crear la DB si no existe
+# Actualizar pip y instalar dependencias
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
+
+# Inicializar base de datos si no existe
 if [ ! -f "dononofre.db" ]; then
-    python -m app.init_db
+    python3 -m app.init_db
 fi
 
-# correr la app
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# Ejecutar servidor
+python3 -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
