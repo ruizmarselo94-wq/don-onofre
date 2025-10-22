@@ -7,4 +7,4 @@ if [ ! -f "dononofre.db" ]; then
     python -m app.init_db
 fi
 
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
+python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
