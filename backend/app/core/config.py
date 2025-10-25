@@ -1,7 +1,7 @@
 # core/config.py
 import os
 
-ADAMSPAY_API_KEY = os.getenv("ADAMSPAY_API_KEY", "cambia_esto")
+ADAMSPAY_API_KEY = os.getenv("ADAMSPAY_API_KEY", "ap-861a6fcd86bb47a04e4c709")
 ADAMSPAY_ENV = os.getenv("ADAMSPAY_ENV", "staging").lower()  # 'staging' | 'production'
 
 if ADAMSPAY_ENV == "production":
