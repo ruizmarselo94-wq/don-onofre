@@ -1,27 +1,22 @@
 #!/bin/bash
 set -ex
 
-echo "PWD antes:" $(pwd)
-echo "Listando raíz:"
+echo "PWD: $(pwd)"
+echo "Contenido actual:"
 ls -la
 
-# Entrar a backend (donde está la carpeta app)
-cd backend
-echo "PWD después cd backend:" $(pwd)
-echo "Listando backend:"
-ls -la
-
-# Asegurar que backend esté en PYTHONPATH
+# Estás ya dentro de /app/backend
 export PYTHONPATH="$PWD:${PYTHONPATH:-}"
 
-# Instalar deps
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
+# Python en Railway es python3
+command -v python3
+python3 -m pip install --upgrade pip
+python3 -m pip install -r requirements.txt
 
-# Inicializar DB si hace falta
+# Inicializar DB si no existe (ruta correcta del módulo)
 if [ ! -f "dononofre.db" ]; then
-  python -m app.init_db
+  python3 -m app.db.init_db
 fi
 
-# Ejecutar uvicorn (usa -m para garantizar el python correcto)
-python -m uvicorn app.main:app --host 0.0.0.0 --port $PORT
+# Levantar FastAPI
+exec python3 -m uvicorn app.main:app --host 0.0.0.0 --port "${PORT:-8000}"
