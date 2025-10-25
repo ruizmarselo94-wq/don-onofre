@@ -13,7 +13,7 @@ BASE_DIR = Path(__file__).resolve().parent  # .../backend/app
 FRONTEND_DIR = (BASE_DIR / "../../frontend").resolve()
 
 # /static -> archivos del frontend (index.html referencia /static/app.js y /static/styles.css)
-app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR)), name="static")
+app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
 
 # GET / -> servir index.html
 @app.get("/", include_in_schema=False)

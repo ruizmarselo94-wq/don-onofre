@@ -1,5 +1,5 @@
 // frontend/app.js
-const API_BASE = "https://don-onofre-production.up.railway.app";
+const API_BASE = window.location.origin;
 const CUSTOMER_ID = 1; // demo
 
 let PRODUCTS = [];
