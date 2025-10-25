@@ -12,6 +12,9 @@ app = FastAPI(title="Don Onofre API")
 BASE_DIR = Path(__file__).resolve().parent  # .../backend/app
 FRONTEND_DIR = (BASE_DIR / "../../frontend").resolve()
 
+print("FRONTEND_DIR=", FRONTEND_DIR)
+print("INDEX EXISTS=", (FRONTEND_DIR / "index.html").exists())
+
 # /static -> archivos del frontend (index.html referencia /static/app.js y /static/styles.css)
 app.mount("/static", StaticFiles(directory=str(FRONTEND_DIR / "static")), name="static")
 
