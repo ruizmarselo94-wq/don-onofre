@@ -1,0 +1,5 @@
+backend/dononofre.db
+.vscode/
+__pycache__/
+*.pyc
+.env

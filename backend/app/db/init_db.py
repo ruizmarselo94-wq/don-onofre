@@ -1,5 +1,5 @@
-from app.crud import SessionLocal, engine
-from app import models
+from app.db.crud import SessionLocal, engine
+from app.db import models
 
 def seed():
     # Crear tablas si no existen
