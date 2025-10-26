@@ -1,8 +1,10 @@
-import pathlib
-from fastapi import FastAPI, HTTPException
-from fastapi.responses import FileResponse
+# backend/app/main.py
+from pathlib import Path
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from app.api import products, orders, payments, webhooks
+import os
 
 app = FastAPI(title="Don Onofre API")
 
@@ -19,23 +21,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-BASE_DIR = pathlib.Path(__file__).resolve().parents[2]   # .../don-onofre
-FRONTEND_DIR = BASE_DIR / "frontend"
+# --- Resolver FRONTEND_DIR de forma robusta ---
+HERE = Path(__file__).resolve()
+CANDIDATES = [
+    HERE.parents[2] / "frontend",     # repo_root/frontend  (ej: C:\Proyectos\don-onofre\frontend)
+    HERE.parents[1] / "frontend",     # backend/frontend     (por si lo movés adentro)
+]
+FRONTEND_DIR = next((p for p in CANDIDATES if p.is_dir()), None)
+if FRONTEND_DIR is None:
+    # Permite sobreescribir por env si hiciera falta
+    env_dir = os.getenv("FRONTEND_DIR")
+    if env_dir and Path(env_dir).is_dir():
+        FRONTEND_DIR = Path(env_dir)
+    else:
+        # Último recurso: no montar estáticos (evita crashear)
+        FRONTEND_DIR = None
 
-@app.get("/", include_in_schema=False)
-def root():
-    p = FRONTEND_DIR / "index.html"
-    if not p.exists(): raise HTTPException(404, "index.html no encontrado")
-    return FileResponse(p)
-
-@app.get("/app.js", include_in_schema=False)
-def app_js():
-    p = FRONTEND_DIR / "app.js"
-    if not p.exists(): raise HTTPException(404, "app.js no encontrado")
-    return FileResponse(p)
-
-@app.get("/styles.css", include_in_schema=False)
-def styles_css():
-    p = FRONTEND_DIR / "styles.css"
-    if not p.exists(): raise HTTPException(404, "styles.css no encontrado")
-    return FileResponse(p)
+if FRONTEND_DIR:
+    # Sirve index.html en "/" y recursos dentro del mismo árbol
+    app.mount("/", StaticFiles(directory=str(FRONTEND_DIR), html=True), name="frontend")
