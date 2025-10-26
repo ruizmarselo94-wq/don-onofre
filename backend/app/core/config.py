@@ -11,14 +11,16 @@ else:
     ADAMSPAY_BASE = "staging.adamspay.com"
     ADAMSPAY_API_PREFIX = "/api/v1"
 
-# URL pública de tu app para que AdamsPay envíe el webhook
-# En Railway: setear PUBLIC_BASE_URL = https://<tu-servicio>.up.railway.app
-PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "don-onofre-production-ec45.up.railway.app").rstrip("/")
+# URL pública para webhook/returnUrls
+# En Railway, setear: PUBLIC_BASE_URL = https://<tu-servicio>.up.railway.app
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "").strip().rstrip("/")
+if PUBLIC_BASE_URL and not PUBLIC_BASE_URL.startswith(("http://", "https://")):
+    PUBLIC_BASE_URL = "https://" + PUBLIC_BASE_URL
 
 # Webhook (si usás firma/token propio, ajustar aquí)
 WEBHOOK_SIGNATURE_HEADER = os.getenv("WEBHOOK_SIGNATURE_HEADER", "")
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
 
-# Formato clásico (ya no se usa para crear, pero queda por compat)
+# Compat (no se usa al crear deudas nuevas)
 def make_doc_id(order_id: int) -> str:
     return f"order-{order_id}"

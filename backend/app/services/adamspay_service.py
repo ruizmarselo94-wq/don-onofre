@@ -39,7 +39,7 @@ def _delete(path: str, headers: dict) -> dict:
 def create_debt(doc_id: str, total_pyg: float, label: str = None, days_valid: int = 2) -> str:
     """
     Crea la deuda y devuelve la payUrl.
-    Incluye webhook y returnUrls cuando PUBLIC_BASE_URL está configurado.
+    Incluye webhook y returnUrls cuando PUBLIC_BASE_URL está configurado (con https://).
     """
     if not label:
         label = f"Pedido #{doc_id}"
@@ -57,7 +57,7 @@ def create_debt(doc_id: str, total_pyg: float, label: str = None, days_valid: in
         },
     }
 
-    # Agregar webhook/returnUrls si tenemos URL pública
+    # Adjuntar webhook/returnUrls si tenemos URL pública válida
     if PUBLIC_BASE_URL:
         debt["webhook"] = {"url": f"{PUBLIC_BASE_URL}/webhooks/adams"}
         debt["returnUrls"] = {
@@ -99,3 +99,8 @@ def delete_debt(doc_id: str, notify_webhook: str = "true") -> dict:
     if "debt" not in resp:
         raise ValueError(f"No se pudo eliminar deuda: {resp}")
     return resp["debt"]
+
+# (Opcional) Utilidad para forzar reemisión de notificación al webhook
+def request_debt_notification(doc_id: str) -> dict:
+    headers = {"apikey": ADAMSPAY_API_KEY, "Content-Type": "application/json"}
+    return _post(f"{DEBTS_PATH}/{doc_id}/notifications", {}, headers)
