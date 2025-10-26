@@ -30,14 +30,6 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 # montar archivos estáticos en /static (styles.css, app.js, etc.)
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-# --- Dependencia para DB ---
-def get_db():
-    db = crud.SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
-
 # --- Raíz ---
 @app.get("/", include_in_schema=False)
 def root():
