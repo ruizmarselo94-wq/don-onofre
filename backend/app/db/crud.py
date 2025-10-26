@@ -1,3 +1,4 @@
+# app/db/crud.py
 from typing import List, Optional
 from decimal import Decimal, InvalidOperation
 import os
@@ -121,6 +122,14 @@ def create_order(db: Session, order_data: schemas.OrderCreate) -> models.Order:
         db.rollback()
         raise
 
+def set_order_payment_info(db: Session, order_id: int, doc_id: str, pay_url: str) -> None:
+    order = get_order(db, order_id)
+    if not order:
+        raise ValueError("Orden no encontrada")
+    order.adams_doc_id = doc_id
+    order.adams_pay_url = pay_url
+    db.add(order)
+    db.commit()
 
 def get_order(db: Session, order_id: int) -> Optional[models.Order]:
     order = db.query(models.Order).filter(models.Order.id == order_id).first()

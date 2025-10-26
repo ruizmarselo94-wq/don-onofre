@@ -1,44 +1,43 @@
-# services/order_service.py
+# app/services/order_service.py
+import math, time
 from app.db import crud
-from app.core.config import make_doc_id
 from app.services import adamspay_service as aps
 
-# Crear orden en DB y deuda en AdamsPay. Devuelve (order_id, pay_url)
+def _make_unique_doc_id(order) -> str:
+    # Estable, reproducible y único incluso si reinicia el autoincremental:
+    # order-<id>-<epoch_s_de_created_at>
+    ts = int(order.created_at.timestamp()) if hasattr(order, "created_at") else int(time.time())
+    return f"order-{order.id}-{ts}"
+
 def create_order_with_payment(db, order_in):
     order = crud.create_order(db, order_in)  # status "pending"
-    doc_id = make_doc_id(order.id)
+    doc_id = _make_unique_doc_id(order)
     pay_url = aps.create_debt(doc_id, order.total, label=f"Pedido #{order.id}")
+    crud.set_order_payment_info(db, order.id, doc_id, pay_url)
     return order, pay_url
 
-# Estado “real” de la orden usando AdamsPay (sin polling en backend; llamada on-demand)
 def get_order_status(db, order_id: int):
     order = crud.get_order(db, order_id)
     if not order:
         return None
-    doc_id = make_doc_id(order.id)
+    doc_id = order.adams_doc_id or _make_unique_doc_id(order)  # fallback por compatibilidad
     try:
         d = aps.read_debt(doc_id)
-        # map simple para frontend actual
         status = "paid" if (d.get("payStatus") == "paid") else "pending"
         return {"id": order.id, "status": status, "payUrl": d.get("payUrl")}
     except Exception:
-        # si falla lectura, devolvemos lo que sabemos de DB
-        return {"id": order.id, "status": order.status, "payUrl": None}
+        return {"id": order.id, "status": order.status, "payUrl": order.adams_pay_url}
 
-# Cancelar: elimina la deuda si existe y marca orden en DB
 def cancel_order(db, order_id: int):
     order = crud.get_order(db, order_id)
     if not order:
         return None
-    # bloquear si ya entregada (si implementás ese estado luego)
     if getattr(order, "status", "") == "paid":
-        # Devolver 400 en API: para refund usen otro endpoint (opcional)
         raise ValueError("Orden pagada: usá refund (no implementado aquí).")
-    doc_id = make_doc_id(order.id)
+    doc_id = order.adams_doc_id or _make_unique_doc_id(order)
     try:
         aps.delete_debt(doc_id, notify_webhook="true")
     except Exception:
-        # si ya no existe en AdamsPay, seguimos igual
         pass
     crud.update_order_status(db, order.id, "cancelled")
     return {"order_id": order.id, "status": "cancelled"}
