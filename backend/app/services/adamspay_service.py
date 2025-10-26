@@ -2,7 +2,12 @@
 import http.client
 import json
 import datetime
-from app.core.config import ADAMSPAY_API_KEY, ADAMSPAY_BASE, ADAMSPAY_API_PREFIX
+from app.core.config import (
+    ADAMSPAY_API_KEY,
+    ADAMSPAY_BASE,
+    ADAMSPAY_API_PREFIX,
+    PUBLIC_BASE_URL,
+)
 
 DEBTS_PATH = f"{ADAMSPAY_API_PREFIX}/debts"
 
@@ -33,8 +38,8 @@ def _delete(path: str, headers: dict) -> dict:
 
 def create_debt(doc_id: str, total_pyg: float, label: str = None, days_valid: int = 2) -> str:
     """
-    Crear deuda y devolver payUrl (URL para cobrar).
-    - Usa x-if-exists: update (idempotencia sobre el mismo docId).
+    Crea la deuda y devuelve la payUrl.
+    Incluye webhook y returnUrls cuando PUBLIC_BASE_URL está configurado.
     """
     if not label:
         label = f"Pedido #{doc_id}"
@@ -42,35 +47,40 @@ def create_debt(doc_id: str, total_pyg: float, label: str = None, days_valid: in
     now_utc = datetime.datetime.utcnow()
     end_utc = now_utc + datetime.timedelta(days=days_valid)
 
-    payload = {
-        "debt": {
-            "docId": doc_id,
-            "label": label,
-            "amount": {"currency": "PYG", "value": str(int(total_pyg))},
-            "validPeriod": {
-                "start": now_utc.strftime("%Y-%m-%dT%H:%M:%S"),
-                "end":   end_utc.strftime("%Y-%m-%dT%H:%M:%S")
-            }
-        }
+    debt = {
+        "docId": doc_id,
+        "label": label,
+        "amount": {"currency": "PYG", "value": str(int(total_pyg))},
+        "validPeriod": {
+            "start": now_utc.strftime("%Y-%m-%dT%H:%M:%S"),
+            "end":   end_utc.strftime("%Y-%m-%dT%H:%M:%S"),
+        },
     }
+
+    # Agregar webhook/returnUrls si tenemos URL pública
+    if PUBLIC_BASE_URL:
+        debt["webhook"] = {"url": f"{PUBLIC_BASE_URL}/webhooks/adams"}
+        debt["returnUrls"] = {
+            "success": f"{PUBLIC_BASE_URL}/",
+            "failure": f"{PUBLIC_BASE_URL}/",
+        }
+
+    payload = {"debt": debt}
 
     headers = {
         "apikey": ADAMSPAY_API_KEY,
         "Content-Type": "application/json",
-        "x-if-exists": "update"
+        "x-if-exists": "update",
     }
 
     resp = _post(DEBTS_PATH, payload, headers)
-    debt = resp.get("debt") or {}
-    pay_url = debt.get("payUrl")
+    debt_resp = resp.get("debt") or {}
+    pay_url = debt_resp.get("payUrl")
     if not pay_url:
         raise ValueError(f"No se pudo crear deuda: {resp}")
     return pay_url
 
 def read_debt(doc_id: str) -> dict:
-    """
-    Leer deuda: retorna info clave (status de pago y estado del objeto).
-    """
     headers = {"apikey": ADAMSPAY_API_KEY}
     resp = _get(f"{DEBTS_PATH}/{doc_id}", headers)
     debt = resp.get("debt") or {}
@@ -79,14 +89,11 @@ def read_debt(doc_id: str) -> dict:
     return {
         "docId": debt.get("docId"),
         "payUrl": debt.get("payUrl"),
-        "payStatus": pay_status,    # 'paid' | 'pending' | ...
-        "objStatus": obj_status     # 'active' | 'success' | ...
+        "payStatus": pay_status,
+        "objStatus": obj_status,
     }
 
 def delete_debt(doc_id: str, notify_webhook: str = "true") -> dict:
-    """
-    Eliminar deuda. notify_webhook: 'true' | 'false' | 'now'
-    """
     headers = {"apikey": ADAMSPAY_API_KEY, "x-should-notify": notify_webhook}
     resp = _delete(f"{DEBTS_PATH}/{doc_id}", headers)
     if "debt" not in resp:

@@ -11,10 +11,14 @@ else:
     ADAMSPAY_BASE = "staging.adamspay.com"
     ADAMSPAY_API_PREFIX = "/api/v1"
 
-# Webhook (si usan firma HMAC o token propio, ajustá aquí)
-WEBHOOK_SIGNATURE_HEADER = os.getenv("WEBHOOK_SIGNATURE_HEADER", "")       # ej: X-Adams-Signature (si existiera)
-WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")                           # opcional; si no, dejar vacío
+# URL pública de tu app para que AdamsPay envíe el webhook
+# En Railway: setear PUBLIC_BASE_URL = https://<tu-servicio>.up.railway.app
+PUBLIC_BASE_URL = os.getenv("PUBLIC_BASE_URL", "don-onofre-production-ec45.up.railway.app").rstrip("/")
 
-# Formato de docId: acá usamos el patrón del sistema viejo
+# Webhook (si usás firma/token propio, ajustar aquí)
+WEBHOOK_SIGNATURE_HEADER = os.getenv("WEBHOOK_SIGNATURE_HEADER", "")
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
+
+# Formato clásico (ya no se usa para crear, pero queda por compat)
 def make_doc_id(order_id: int) -> str:
     return f"order-{order_id}"
