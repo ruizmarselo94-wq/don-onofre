@@ -15,64 +15,91 @@
   </header>
 
   <main class="wrap">
-    <section class="products" id="products"></section>
+    <!-- Vista de catálogo + carrito (pre-orden) -->
+    <section class="catalog-view" id="catalogView">
+      <section class="products" id="products"></section>
 
-    <aside class="cart">
-      <div class="cart-card">
-        <div class="cart-card__header">
-          <h3>
-            <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="vertical-align:middle;margin-right:8px">
-              <path fill="currentColor" d="M7 4h-2l-1 2H2v2h1l3.6 7.59-1.35 2.45A1 1 0 0 0 5.99 19h12.02v-2H6.42c.07-.12.12-.25.15-.38L7.1 15h7.45a1 1 0 0 0 .95-.68l1.6-5.2A1 1 0 0 0 16.3 8H6.21l-.94-2zM7 20a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
-            </svg>
-            Carrito
-          </h3>
-          <div class="cart-badge" id="cartCount">0</div>
-        </div>
+      <aside class="cart">
+        <div class="cart-card">
+          <div class="cart-card__header">
+            <h3>
+              <svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true" focusable="false" style="vertical-align:middle;margin-right:8px">
+                <path fill="currentColor" d="M7 4h-2l-1 2H2v2h1l3.6 7.59-1.35 2.45A1 1 0 0 0 5.99 19h12.02v-2H6.42c.07-.12.12-.25.15-.38L7.1 15h7.45a1 1 0 0 0 .95-.68l1.6-5.2A1 1 0 0 0 16.3 8H6.21l-.94-2zM7 20a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm10 0a2 2 0 1 0 0 4 2 2 0 0 0 0-4z"/>
+              </svg>
+              Carrito
+            </h3>
+            <div class="cart-badge" id="cartCount">0</div>
+          </div>
 
-        <div class="cart-items" id="cartItems">
-          <div class="muted small">Carrito vacío</div>
-        </div>
+          <div class="cart-items" id="cartItems">
+            <div class="muted small">Carrito vacío</div>
+          </div>
 
-        <div class="cart-card__footer">
-          <div class="info" id="orderInfo" style="display:none;">
-            <div><strong>Orden #</strong> <span id="orderId">—</span></div>
-            <div><strong>Total:</strong> <span id="orderTotal">—</span></div>
-            <div><strong>Estado:</strong> <span id="orderStatus">—</span></div>
+          <div class="cart-card__footer">
+            <div class="cart-total">
+              <div class="small muted">Total:</div>
+              <div id="cartTotal" style="font-weight:800">0</div>
+            </div>
 
-            <div style="grid-column: 1 / -1; margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-              <a id="paymentLink" href="#" class="btn btn-primary" style="display:none">Ir a pagar</a>
-              <button id="btnCheck" class="btn btn-outline" style="display:none">Verificar estado</button>
-              <button id="btnNew" class="btn btn-outline" style="display:none">Nueva compra</button>
+            <div class="cart-footer-sep" aria-hidden="true"></div>
+
+            <div class="cart-buttons">
+              <button id="btnCheckout" class="btn btn-primary" disabled>Finalizar compra</button>
+              <button id="btnClear" class="btn btn-outline">Limpiar</button>
             </div>
           </div>
+        </div>
+      </aside>
+    </section>
 
-          <div class="cart-total">
-            <div class="small muted">Total:</div>
-            <div id="cartTotal" style="font-weight:800">0</div>
+    <!-- Workspace de Pago (post-orden, sin modales) -->
+    <section id="checkoutWorkspace" class="checkout hidden">
+      <!-- Columna izquierda: Ticket / Resumen -->
+      <div class="checkout-left">
+        <div class="ticket-card">
+          <div class="ticket-card__header">
+            <h3>Orden <span class="muted">#</span><span id="ckOrderId">—</span></h3>
+            <span id="ckOrderStatus" class="order-badge">—</span>
           </div>
+          <div id="ticketItems" class="ticket-items">
+            <!-- filas generadas por JS -->
+          </div>
+          <div class="ticket-total">
+            <div class="small muted">Total:</div>
+            <div id="ckOrderTotal" class="ticket-total__amount">—</div>
+          </div>
+        </div>
 
-          <div class="cart-footer-sep" aria-hidden="true"></div>
+        <div class="checkout-actions">
+          <button id="btnBackToShop" class="btn btn-outline">Nueva compra</button>
+        </div>
+      </div>
 
-          <div class="cart-buttons">
-            <button id="btnCheckout" class="btn btn-primary" disabled>Finalizar compra</button>
-            <button id="btnClear" class="btn btn-outline">Limpiar</button>
+      <!-- Columna derecha: Pasarela de pago embebida -->
+      <div class="checkout-right">
+        <div class="pay-card">
+          <div class="pay-card__header">
+            <h3>Pago seguro</h3>
+            <div class="pay-actions">
+              <button id="btnCheck" class="btn btn-outline" style="display:none">Verificar estado</button>
+              <a id="paymentExternal" href="#" target="_blank" rel="noopener" class="btn btn-primary" style="display:none">Abrir en pestaña</a>
+            </div>
+          </div>
+          <div class="pay-frame-wrapper">
+            <iframe id="paymentFrameInline" title="AdamsPay"></iframe>
+          </div>
+          <div class="pay-hints muted small">
+            Si el banco abre verificación en otra pestaña, podés usar “Verificar estado”. “Abrir en pestaña” es un plan B si el iframe está bloqueado.
           </div>
         </div>
       </div>
-    </aside>
+    </section>
   </main>
 
   <footer>
     Implementación de prueba — Don Onofre. Usar el cliente con customer_id = 1 (demo).
   </footer>
 
-  <!-- Modal de pago (sin botón de cierre manual) -->
-  <div id="paymentModal">
-    <div>
-      <iframe id="paymentFrame"></iframe>
-    </div>
-  </div>
-
-  <script src="/app.js?v=20251026d" defer></script>
+  <script src="/app.js?v=20251026-flow" defer></script>
 </body>
 </html>

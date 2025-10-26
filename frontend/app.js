@@ -4,7 +4,8 @@ const CUSTOMER_ID = 1; // demo
 
 let PRODUCTS = [];
 let CART = [];
-let alertedOrders = {};  // orderId -> ya se mostró toast
+let ORDER_ITEMS_SNAPSHOT = []; // items congelados al crear la orden
+let alertedOrders = {};  // orderId -> toast ya mostrado
 let CURRENT_ORDER = null; // { id, status }
 
 /* -------- Traducciones de estado -------- */
@@ -159,84 +160,118 @@ function hasActivePendingOrder() { return CURRENT_ORDER && CURRENT_ORDER.status 
 function hasActiveOrder() { return CURRENT_ORDER !== null; }
 function setAddButtonsEnabled(enabled) { document.querySelectorAll('.add-btn').forEach(b => b.disabled = !enabled); }
 
-/* -------- Orden / AdamsPay (sin SSE, con chequeos locales) -------- */
+/* -------- Orden / AdamsPay (flujo sin modal) -------- */
 async function createOrder() {
-  if (hasActivePendingOrder()) { showToast('Ya tienes una orden pendiente. Verificá su estado.', 'info'); return; }
+  if (hasActivePendingOrder()) { showToast('Ya tenés una orden pendiente. Verificá su estado.', 'info'); return; }
   if (!CART.length) return showToast('Carrito vacío', 'error');
+
   const body = { customer_id:CUSTOMER_ID, items:CART.map(i=>({product_id:i.product_id,cantidad:i.cantidad})) };
   try {
     const res = await fetch(`${API_BASE}/orders`, { method:'POST', headers:{'Content-Type':'application/json'}, body:JSON.stringify(body) });
     if (!res.ok) { const error=await res.json().catch(()=>null); throw new Error(error?.detail||`HTTP ${res.status}`); }
     const data = await res.json();
+
+    // Estado
     CURRENT_ORDER = { id: data.order_id, status: 'pending' };
-    showOrderInfo(data.order_id, data.payment_url);
-    setAddButtonsEnabled(false);
-    document.getElementById('btnCheckout').disabled = true;
-    document.getElementById('btnClear').disabled = true;
+    ORDER_ITEMS_SNAPSHOT = CART.map(i => ({ ...i })); // congelar
+    enterCheckout(data.order_id, data.payment_url);
   } catch(err) {
     console.error(err);
     showToast('Error creando la orden: '+err.message, 'error');
   }
 }
 
-function showOrderInfo(orderId,paymentUrl) {
-  document.getElementById('orderInfo').style.display='block';
-  const statusEl = document.getElementById('orderStatus');
-  statusEl.textContent = STATUS_ES['pending'];
-  statusEl.className = 'pending';
-  document.getElementById('orderId').textContent=orderId;
-  document.getElementById('orderTotal').textContent=formatMoney(calcTotal());
+/* Entra al workspace de pago y arma ambas columnas */
+function enterCheckout(orderId, paymentUrl) {
+  // Ocultar catálogo + carrito, mostrar checkout
+  document.getElementById('catalogView').classList.add('hidden');
+  const ws = document.getElementById('checkoutWorkspace');
+  ws.classList.remove('hidden');
 
-  if (paymentUrl) showPayment(paymentUrl, orderId);
+  // Render ticket
+  document.getElementById('ckOrderId').textContent = orderId;
+  document.getElementById('ckOrderTotal').textContent = formatMoney(calcSnapshotTotal());
+  updateStatusBadge('pending');
 
-  const link=document.getElementById('paymentLink');
-  link.href = '#';
-  link.style.display=paymentUrl?'inline-block':'none';
-  link.classList.remove('hidden');
-  link.textContent = 'Ir a pagar';
-  link.onclick = (e) => { e.preventDefault(); if(paymentUrl) showPayment(paymentUrl, orderId); };
+  renderTicketItems();
 
-  const btnCheck=document.getElementById('btnCheck');
-  btnCheck.style.display='inline-block';
-  btnCheck.onclick=()=>checkOrderStatus(orderId);
-  btnCheck.classList.remove('hidden');
+  // Acciones
+  const btnBack = document.getElementById('btnBackToShop');
+  btnBack.onclick = () => resetForNewPurchase();
 
-  const btnNew = document.getElementById('btnNew');
-  btnNew.style.display='none';
-  btnNew.onclick = () => resetForNewPurchase();
+  const btnCheck = document.getElementById('btnCheck');
+  btnCheck.style.display = 'inline-block';
+  btnCheck.onclick = () => checkOrderStatus(orderId);
 
-  const focusHandler = async () => {
-    await checkOrderStatus(orderId);
-    if (document.getElementById('orderStatus').textContent === STATUS_ES['paid']) {
-      window.removeEventListener('focus', focusHandler);
-    }
-  };
-  window.addEventListener('focus', focusHandler);
+  const external = document.getElementById('paymentExternal');
+  if (paymentUrl) {
+    external.href = paymentUrl;
+    external.style.display = 'inline-block';
+  } else {
+    external.removeAttribute('href');
+    external.style.display = 'none';
+  }
+
+  // Bloquear edición del carrito
+  setAddButtonsEnabled(false);
+
+  // Cargar pago embebido y arrancar polling
+  if (paymentUrl) showPaymentInline(paymentUrl, orderId);
 }
 
+function renderTicketItems() {
+  const tbody = document.getElementById('ticketItems');
+  tbody.innerHTML = '';
+  if (!ORDER_ITEMS_SNAPSHOT.length) {
+    tbody.innerHTML = '<div class="muted small">Sin items.</div>';
+    return;
+  }
+  ORDER_ITEMS_SNAPSHOT.forEach(it => {
+    const row = document.createElement('div');
+    row.className = 'ticket-row';
+    row.innerHTML = `
+      <div class="t-name">${escapeHtml(it.nombre)}</div>
+      <div class="t-qty">x${it.cantidad}</div>
+      <div class="t-price">${formatMoney(it.precio)}</div>
+      <div class="t-sub">${formatMoney(it.precio * it.cantidad)}</div>
+    `;
+    tbody.appendChild(row);
+  });
+}
+
+function calcSnapshotTotal() {
+  return ORDER_ITEMS_SNAPSHOT.reduce((s, i) => s + i.precio * i.cantidad, 0);
+}
+
+function updateStatusBadge(status) {
+  const el = document.getElementById('ckOrderStatus');
+  el.textContent = STATUS_ES[status] || '—';
+  el.className = 'order-badge ' + (status || '');
+}
+
+/* Verificación de estado */
 async function checkOrderStatus(orderId) {
   try {
     const res = await fetch(`${API_BASE}/orders/${orderId}`);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-    const statusEl = document.getElementById('orderStatus');
-    statusEl.textContent = STATUS_ES[data.status] || data.status || '—';
-    statusEl.className = data.status || '';
+
     if (CURRENT_ORDER && CURRENT_ORDER.id === orderId) CURRENT_ORDER.status = data.status;
+    updateStatusBadge(data.status || '');
 
     if (data.status === 'paid' && !alertedOrders[orderId]) {
-      showToast('Orden Pagada ✅', 'success');
       alertedOrders[orderId] = true;
+      showToast('Orden Pagada ✅', 'success');
+      // Opcional: acciones de éxito (ej: mostrar comprobante / thanks)
+    } else if (data.status === 'cancelled') {
+      showToast('Orden cancelada', 'info');
+    } else if (data.status === 'error') {
+      showToast('Error en el pago', 'error');
+    }
 
-      const btnCheck = document.getElementById('btnCheck'); if (btnCheck) btnCheck.classList.add('hidden');
-      const link = document.getElementById('paymentLink'); if (link) link.classList.add('hidden');
-      const btnNew = document.getElementById('btnNew'); if (btnNew) btnNew.style.display = 'inline-block';
-      document.getElementById('btnCheckout').disabled = true;
-      updateCartUI();
-      hidePaymentModal();
-    } else if (data.status !== 'paid') {
-      // Info leve, sin spam
-      // showToast('Estado: ' + (STATUS_ES[data.status] || data.status), 'info');
+    // Si se cerró el ciclo (paid/cancelled/error), habilitamos "Nueva compra"
+    if (['paid','cancelled','error'].includes(data.status)) {
+      document.getElementById('btnBackToShop').disabled = false;
     }
   } catch(err) {
     console.error(err);
@@ -244,7 +279,7 @@ async function checkOrderStatus(orderId) {
   }
 }
 
-/* -------- Eliminar deuda en AdamsPay -------- */
+/* Eliminar deuda en AdamsPay (para cancelar pendientes al salir) */
 async function deleteOrder(orderId) {
   if (!orderId) return;
   try {
@@ -253,10 +288,8 @@ async function deleteOrder(orderId) {
       headers: { 'Content-Type': 'application/json' }
     });
     if (!res.ok) {
-      // Intentar entender el error
       let detail = null;
       try { detail = (await res.json()).detail; } catch {}
-      // Silenciar casos esperables: 404 (ya no existe) o 400 "Orden pagada"
       if (res.status === 404 || (res.status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('orden pagada'))) {
         console.warn('deleteOrder silenciado:', res.status, detail);
         return;
@@ -276,7 +309,6 @@ async function deleteOrder(orderId) {
 async function resetForNewPurchase() {
   if (CURRENT_ORDER) {
     if (alertedOrders[CURRENT_ORDER.id]) delete alertedOrders[CURRENT_ORDER.id];
-    // Si ya está pagada, no intentes borrar (backend no permite)
     if (CURRENT_ORDER.status !== 'paid') {
       try { await deleteOrder(CURRENT_ORDER.id); } catch {}
     }
@@ -284,32 +316,20 @@ async function resetForNewPurchase() {
 
   CURRENT_ORDER = null;
   CART = [];
-  updateCartUI();
+  ORDER_ITEMS_SNAPSHOT = [];
+
+  // UI
+  document.getElementById('checkoutWorkspace').classList.add('hidden');
+  document.getElementById('catalogView').classList.remove('hidden');
+  const frame = document.getElementById('paymentFrameInline');
+  stopInlinePolling(frame);
+  frame.src = '';
+
   setAddButtonsEnabled(true);
-
-  const link = document.getElementById('paymentLink');
-  if (link) { link.classList.remove('hidden'); link.style.display = 'none'; link.href = '#'; link.onclick = null; }
-
-  const btnCheck = document.getElementById('btnCheck');
-  if (btnCheck) { btnCheck.classList.remove('hidden'); btnCheck.style.display = 'none'; btnCheck.onclick = null; }
-
-  const btnNew = document.getElementById('btnNew');
-  if (btnNew) btnNew.style.display = 'none';
-
-  document.getElementById('btnCheckout').disabled = CART.length === 0;
-  document.getElementById('btnClear').disabled = false;
-
-  document.getElementById('orderInfo').style.display = 'none';
-  document.getElementById('orderId').textContent = '—';
-  document.getElementById('orderTotal').textContent = '—';
-  const statusEl = document.getElementById('orderStatus');
-  statusEl.textContent = '—';
-  statusEl.className = '';
-
-  hidePaymentModal();
+  updateCartUI();
 }
 
-/* Modificar clearCart para eliminar deuda si hay orden pendiente */
+/* Limpiar carrito (pre-orden). Si hay orden pendiente, elimina deuda y resetea. */
 async function clearCart() {
   if (hasActivePendingOrder()) {
     showToast('No podés limpiar el carrito con una orden pendiente. Eliminando deuda...', 'info');
@@ -322,33 +342,26 @@ async function clearCart() {
   setAddButtonsEnabled(true);
 }
 
-/* -------- Modal de pago con doble estrategia de cierre --------
-   A) Cierre por retorno same-origin (si AdamsPay redirige al PUBLIC_BASE_URL).
-   B) Fallback: polling suave del estado mientras el modal esté abierto.
+/* -------- Pago embebido (iframe) con doble estrategia --------
+   A) Retorno same-origin (onload).
+   B) Fallback: polling suave del estado mientras el iframe esté visible.
 ---------------------------------------------------------------- */
-function showPayment(paymentUrl, orderId){
-  const modal = document.getElementById('paymentModal');
-  const frame = document.getElementById('paymentFrame');
+function showPaymentInline(paymentUrl, orderId){
+  const frame = document.getElementById('paymentFrameInline');
 
   // limpiar handlers / timers previos
-  if (frame._onLoadHandler) frame.removeEventListener('load', frame._onLoadHandler);
-  if (frame._statusPoll) { clearInterval(frame._statusPoll); frame._statusPoll = null; }
-  if (frame._statusPollDeadlineTimer) { clearTimeout(frame._statusPollDeadlineTimer); frame._statusPollDeadlineTimer = null; }
-  frame._armed = false;
+  cleanupInlineHandlers(frame);
 
-  // setear URL y mostrar modal
+  // setear URL
   frame.src = '';
   requestAnimationFrame(()=>{ frame.src = paymentUrl; });
-  modal.style.display = 'block';
-  document.body.classList.add('modal-open');
 
   // A) Same-origin return (load-based)
   frame._onLoadHandler = async () => {
     try {
-      const origin = frame.contentWindow.location.origin; // si es cross-origin, tira excepción
+      const origin = frame.contentWindow.location.origin; // cross-origin lanza excepción
       const sameOrigin = origin === window.location.origin;
       if (frame._armed && sameOrigin) {
-        hidePaymentModal();
         await checkOrderStatus(orderId);
         frame.removeEventListener('load', frame._onLoadHandler);
         frame._onLoadHandler = null;
@@ -360,7 +373,7 @@ function showPayment(paymentUrl, orderId){
   };
   frame.addEventListener('load', frame._onLoadHandler);
 
-  // B) Fallback: polling del estado mientras esté abierto el modal (cada 1.5s, hasta 3 minutos)
+  // B) Fallback: polling del estado mientras esté visible (cada 1.5s, hasta 3 min)
   const POLL_MS = 1500;
   const MAX_MS = 3 * 60 * 1000;
   const deadline = Date.now() + MAX_MS;
@@ -368,34 +381,33 @@ function showPayment(paymentUrl, orderId){
   frame._statusPoll = setInterval(async () => {
     try {
       await checkOrderStatus(orderId);
-      if (CURRENT_ORDER?.status === 'paid') {
-        hidePaymentModal();
+      if (['paid','cancelled','error'].includes(CURRENT_ORDER?.status)) {
+        // No cerramos nada; solo dejamos la UI lista para "Nueva compra"
+        stopInlinePolling(frame);
       }
-      if (Date.now() > deadline) {
-        clearInterval(frame._statusPoll);
-        frame._statusPoll = null;
-      }
+      if (Date.now() > deadline) stopInlinePolling(frame);
     } catch { /* silencioso */ }
   }, POLL_MS);
 
   frame._statusPollDeadlineTimer = setTimeout(() => {
-    if (frame._statusPoll) { clearInterval(frame._statusPoll); frame._statusPoll = null; }
+    stopInlinePolling(frame);
   }, MAX_MS + 500);
 }
 
-function hidePaymentModal(){
-  const modal = document.getElementById('paymentModal');
-  const frame = document.getElementById('paymentFrame');
+function cleanupInlineHandlers(frame){
+  if (!frame) return;
   if (frame._onLoadHandler) {
     frame.removeEventListener('load', frame._onLoadHandler);
     frame._onLoadHandler = null;
   }
+  stopInlinePolling(frame);
+  frame._armed = false;
+}
+
+function stopInlinePolling(frame){
+  if (!frame) return;
   if (frame._statusPoll) { clearInterval(frame._statusPoll); frame._statusPoll = null; }
   if (frame._statusPollDeadlineTimer) { clearTimeout(frame._statusPollDeadlineTimer); frame._statusPollDeadlineTimer = null; }
-  frame._armed = false;
-  frame.src = '';
-  modal.style.display = 'none';
-  document.body.classList.remove('modal-open');
 }
 
 /* -------- Helpers & Init -------- */
