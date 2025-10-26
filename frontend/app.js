@@ -159,7 +159,7 @@ function hasActivePendingOrder() { return CURRENT_ORDER && CURRENT_ORDER.status 
 function hasActiveOrder() { return CURRENT_ORDER !== null; }
 function setAddButtonsEnabled(enabled) { document.querySelectorAll('.add-btn').forEach(b => b.disabled = !enabled); }
 
-/* -------- Orden / AdamsPay (sin SSE, sin polling global) -------- */
+/* -------- Orden / AdamsPay (sin SSE, con chequeos locales) -------- */
 async function createOrder() {
   if (hasActivePendingOrder()) { showToast('Ya tienes una orden pendiente. Verificá su estado.', 'info'); return; }
   if (!CART.length) return showToast('Carrito vacío', 'error');
@@ -235,7 +235,8 @@ async function checkOrderStatus(orderId) {
       updateCartUI();
       hidePaymentModal();
     } else if (data.status !== 'paid') {
-      showToast('Estado: ' + (STATUS_ES[data.status] || data.status), 'info');
+      // Info leve, sin spam
+      // showToast('Estado: ' + (STATUS_ES[data.status] || data.status), 'info');
     }
   } catch(err) {
     console.error(err);
@@ -252,8 +253,15 @@ async function deleteOrder(orderId) {
       headers: { 'Content-Type': 'application/json' }
     });
     if (!res.ok) {
-      const error = await res.json().catch(()=>null);
-      throw new Error(error?.detail || `HTTP ${res.status}`);
+      // Intentar entender el error
+      let detail = null;
+      try { detail = (await res.json()).detail; } catch {}
+      // Silenciar casos esperables: 404 (ya no existe) o 400 "Orden pagada"
+      if (res.status === 404 || (res.status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('orden pagada'))) {
+        console.warn('deleteOrder silenciado:', res.status, detail);
+        return;
+      }
+      throw new Error(detail || `HTTP ${res.status}`);
     }
     const data = await res.json();
     console.log('Deuda eliminada:', data);
@@ -268,7 +276,10 @@ async function deleteOrder(orderId) {
 async function resetForNewPurchase() {
   if (CURRENT_ORDER) {
     if (alertedOrders[CURRENT_ORDER.id]) delete alertedOrders[CURRENT_ORDER.id];
-    try { await deleteOrder(CURRENT_ORDER.id); } catch {}
+    // Si ya está pagada, no intentes borrar (backend no permite)
+    if (CURRENT_ORDER.status !== 'paid') {
+      try { await deleteOrder(CURRENT_ORDER.id); } catch {}
+    }
   }
 
   CURRENT_ORDER = null;
@@ -311,24 +322,27 @@ async function clearCart() {
   setAddButtonsEnabled(true);
 }
 
-/* -------- Modal de pago con cierre automático al volver same-origin -------- */
+/* -------- Modal de pago con doble estrategia de cierre --------
+   A) Cierre por retorno same-origin (si AdamsPay redirige al PUBLIC_BASE_URL).
+   B) Fallback: polling suave del estado mientras el modal esté abierto.
+---------------------------------------------------------------- */
 function showPayment(paymentUrl, orderId){
   const modal = document.getElementById('paymentModal');
   const frame = document.getElementById('paymentFrame');
 
-  // limpiar handlers previos
+  // limpiar handlers / timers previos
   if (frame._onLoadHandler) frame.removeEventListener('load', frame._onLoadHandler);
+  if (frame._statusPoll) { clearInterval(frame._statusPoll); frame._statusPoll = null; }
+  if (frame._statusPollDeadlineTimer) { clearTimeout(frame._statusPollDeadlineTimer); frame._statusPollDeadlineTimer = null; }
   frame._armed = false;
 
   // setear URL y mostrar modal
   frame.src = '';
   requestAnimationFrame(()=>{ frame.src = paymentUrl; });
   modal.style.display = 'block';
+  document.body.classList.add('modal-open');
 
-  // Armado por etapas:
-  // 1) Primera carga será AdamsPay (cross-origin) -> intentar leer origin lanzará excepción.
-  //    En catch, marcamos _armed=true (ya estamos en pasarela).
-  // 2) Cuando redirija a PUBLIC_BASE_URL (same-origin), podremos leer origin. Si _armed=true y es same-origin, cerramos.
+  // A) Same-origin return (load-based)
   frame._onLoadHandler = async () => {
     try {
       const origin = frame.contentWindow.location.origin; // si es cross-origin, tira excepción
@@ -339,15 +353,34 @@ function showPayment(paymentUrl, orderId){
         frame.removeEventListener('load', frame._onLoadHandler);
         frame._onLoadHandler = null;
       }
-      // Si no está armado aún y ya es same-origin (raro pero posible por about:blank),
-      // no hacemos nada: esperamos a que se arme (siguiente navegación cross-origin).
     } catch (_) {
-      // Primer load hacia AdamsPay (cross-origin): ahora sí armamos el retorno
+      // Primer load hacia AdamsPay (cross-origin): “armo” el retorno
       frame._armed = true;
     }
   };
-
   frame.addEventListener('load', frame._onLoadHandler);
+
+  // B) Fallback: polling del estado mientras esté abierto el modal (cada 1.5s, hasta 3 minutos)
+  const POLL_MS = 1500;
+  const MAX_MS = 3 * 60 * 1000;
+  const deadline = Date.now() + MAX_MS;
+
+  frame._statusPoll = setInterval(async () => {
+    try {
+      await checkOrderStatus(orderId);
+      if (CURRENT_ORDER?.status === 'paid') {
+        hidePaymentModal();
+      }
+      if (Date.now() > deadline) {
+        clearInterval(frame._statusPoll);
+        frame._statusPoll = null;
+      }
+    } catch { /* silencioso */ }
+  }, POLL_MS);
+
+  frame._statusPollDeadlineTimer = setTimeout(() => {
+    if (frame._statusPoll) { clearInterval(frame._statusPoll); frame._statusPoll = null; }
+  }, MAX_MS + 500);
 }
 
 function hidePaymentModal(){
@@ -357,9 +390,12 @@ function hidePaymentModal(){
     frame.removeEventListener('load', frame._onLoadHandler);
     frame._onLoadHandler = null;
   }
+  if (frame._statusPoll) { clearInterval(frame._statusPoll); frame._statusPoll = null; }
+  if (frame._statusPollDeadlineTimer) { clearTimeout(frame._statusPollDeadlineTimer); frame._statusPollDeadlineTimer = null; }
   frame._armed = false;
   frame.src = '';
   modal.style.display = 'none';
+  document.body.classList.remove('modal-open');
 }
 
 /* -------- Helpers & Init -------- */
