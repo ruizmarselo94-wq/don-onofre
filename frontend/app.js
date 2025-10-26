@@ -233,7 +233,7 @@ async function checkOrderStatus(orderId) {
       const btnNew = document.getElementById('btnNew'); if (btnNew) btnNew.style.display = 'inline-block';
       document.getElementById('btnCheckout').disabled = true;
       updateCartUI();
-      hidePaymentModal(); // por si seguía abierto
+      hidePaymentModal();
     } else if (data.status !== 'paid') {
       showToast('Estado: ' + (STATUS_ES[data.status] || data.status), 'info');
     }
@@ -311,38 +311,53 @@ async function clearCart() {
   setAddButtonsEnabled(true);
 }
 
-/* -------- Modal de pago (detección de retorno por same-origin) -------- */
+/* -------- Modal de pago con cierre automático al volver same-origin -------- */
 function showPayment(paymentUrl, orderId){
   const modal = document.getElementById('paymentModal');
   const frame = document.getElementById('paymentFrame');
 
-  // limpiar watcher previo
-  if (frame._watchTimer) { clearInterval(frame._watchTimer); frame._watchTimer = null; }
+  // limpiar handlers previos
+  if (frame._onLoadHandler) frame.removeEventListener('load', frame._onLoadHandler);
+  frame._armed = false;
 
+  // setear URL y mostrar modal
   frame.src = '';
   requestAnimationFrame(()=>{ frame.src = paymentUrl; });
   modal.style.display = 'block';
 
-  // Watcher: cuando AdamsPay redirige a PUBLIC_BASE_URL (misma origin), ya podemos leer el href: cerramos y consultamos estado
-  frame._watchTimer = setInterval(async () => {
+  // Armado por etapas:
+  // 1) Primera carga será AdamsPay (cross-origin) -> intentar leer origin lanzará excepción.
+  //    En catch, marcamos _armed=true (ya estamos en pasarela).
+  // 2) Cuando redirija a PUBLIC_BASE_URL (same-origin), podremos leer origin. Si _armed=true y es same-origin, cerramos.
+  frame._onLoadHandler = async () => {
     try {
-      // si es cross-origin lanzará excepción; cuando sea nuestra origin no
-      // eslint-disable-next-line no-unused-vars
-      const href = frame.contentWindow.location.href;
-      clearInterval(frame._watchTimer);
-      frame._watchTimer = null;
-      hidePaymentModal();
-      await checkOrderStatus(orderId);
+      const origin = frame.contentWindow.location.origin; // si es cross-origin, tira excepción
+      const sameOrigin = origin === window.location.origin;
+      if (frame._armed && sameOrigin) {
+        hidePaymentModal();
+        await checkOrderStatus(orderId);
+        frame.removeEventListener('load', frame._onLoadHandler);
+        frame._onLoadHandler = null;
+      }
+      // Si no está armado aún y ya es same-origin (raro pero posible por about:blank),
+      // no hacemos nada: esperamos a que se arme (siguiente navegación cross-origin).
     } catch (_) {
-      // sigue en dominio de AdamsPay, ignorar
+      // Primer load hacia AdamsPay (cross-origin): ahora sí armamos el retorno
+      frame._armed = true;
     }
-  }, 800);
+  };
+
+  frame.addEventListener('load', frame._onLoadHandler);
 }
 
 function hidePaymentModal(){
   const modal = document.getElementById('paymentModal');
   const frame = document.getElementById('paymentFrame');
-  if (frame._watchTimer) { clearInterval(frame._watchTimer); frame._watchTimer = null; }
+  if (frame._onLoadHandler) {
+    frame.removeEventListener('load', frame._onLoadHandler);
+    frame._onLoadHandler = null;
+  }
+  frame._armed = false;
   frame.src = '';
   modal.style.display = 'none';
 }
