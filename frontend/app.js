@@ -4,7 +4,6 @@ const CUSTOMER_ID = 1; // demo
 
 let PRODUCTS = [];
 let CART = [];
-let pollingHandles = {}; // orderId -> interval handle
 let alertedOrders = {};  // orderId -> ya se mostró toast
 let CURRENT_ORDER = null; // { id, status }
 
@@ -12,6 +11,7 @@ let CURRENT_ORDER = null; // { id, status }
 const STATUS_ES = {
   pending: "Pendiente",
   paid: "Pagada",
+  cancelled: "Cancelada",
   error: "Error"
 };
 
@@ -159,7 +159,7 @@ function hasActivePendingOrder() { return CURRENT_ORDER && CURRENT_ORDER.status 
 function hasActiveOrder() { return CURRENT_ORDER !== null; }
 function setAddButtonsEnabled(enabled) { document.querySelectorAll('.add-btn').forEach(b => b.disabled = !enabled); }
 
-/* -------- Orden / AdamsPay -------- */
+/* -------- Orden / AdamsPay (sin polling) -------- */
 async function createOrder() {
   if (hasActivePendingOrder()) { showToast('Ya tienes una orden pendiente. Verificá su estado.', 'info'); return; }
   if (!CART.length) return showToast('Carrito vacío', 'error');
@@ -170,7 +170,6 @@ async function createOrder() {
     const data = await res.json();
     CURRENT_ORDER = { id: data.order_id, status: 'pending' };
     showOrderInfo(data.order_id, data.payment_url);
-    startOrderPolling(data.order_id, 2, 30);
     setAddButtonsEnabled(false);
     document.getElementById('btnCheckout').disabled = true;
     document.getElementById('btnClear').disabled = true;
@@ -188,10 +187,10 @@ function showOrderInfo(orderId,paymentUrl) {
   document.getElementById('orderId').textContent=orderId;
   document.getElementById('orderTotal').textContent=formatMoney(calcTotal());
 
-  // Configuro el modal de pago
-  if(paymentUrl) showPayment(paymentUrl);
+  // Modal de pago (limpiar src antes de reusar)
+  if (paymentUrl) showPayment(paymentUrl);
 
-  // Evito que el enlace abra nueva pestaña
+  // Enlace "Ir a pagar" abre modal (no nueva pestaña)
   const link=document.getElementById('paymentLink');
   link.href = paymentUrl||'#';
   link.style.display=paymentUrl?'inline-block':'none';
@@ -199,15 +198,18 @@ function showOrderInfo(orderId,paymentUrl) {
   link.textContent = paymentUrl?'Ir a pagar':'Abrir pago';
   link.onclick = (e) => { e.preventDefault(); if(paymentUrl) showPayment(paymentUrl); };
 
+  // Botón "Verificar estado" (manual)
   const btnCheck=document.getElementById('btnCheck');
   btnCheck.style.display='inline-block';
   btnCheck.onclick=()=>checkOrderStatus(orderId);
   btnCheck.classList.remove('hidden');
 
+  // Botón "Nueva compra"
   const btnNew = document.getElementById('btnNew');
   btnNew.style.display='none';
   btnNew.onclick = () => resetForNewPurchase();
 
+  // Cuando el usuario vuelve el foco a la pestaña (pagó en el iframe o en otra pestaña)
   const focusHandler = async () => {
     await checkOrderStatus(orderId);
     if (document.getElementById('orderStatus').textContent === STATUS_ES['paid']) {
@@ -215,43 +217,6 @@ function showOrderInfo(orderId,paymentUrl) {
     }
   };
   window.addEventListener('focus', focusHandler);
-}
-
-/* Polling */
-function startOrderPolling(orderId, intervalSec=2, maxAttempts=30) {
-  if (pollingHandles[orderId]) return;
-  let attempts = 0;
-  const statusEl = document.getElementById('orderStatus');
-  const handle = setInterval(async () => {
-    attempts++;
-    try {
-      const res = await fetch(`${API_BASE}/orders/${orderId}`);
-      if (!res.ok) return;
-      const data = await res.json();
-      statusEl.textContent = STATUS_ES[data.status] || data.status || '—';
-      statusEl.className = data.status || '';
-      if (CURRENT_ORDER && CURRENT_ORDER.id === orderId) CURRENT_ORDER.status = data.status;
-
-      if (data.status === 'paid') {
-        stopOrderPolling(orderId);
-        if(!alertedOrders[orderId]) showToast('Orden Pagada ✅', 'success');
-        alertedOrders[orderId] = true;
-
-        const btnCheck = document.getElementById('btnCheck'); if (btnCheck) btnCheck.classList.add('hidden');
-        const link = document.getElementById('paymentLink'); if (link) link.classList.add('hidden');
-        const btnNew = document.getElementById('btnNew'); if (btnNew) btnNew.style.display = 'inline-block';
-        document.getElementById('btnCheckout').disabled = true;
-        updateCartUI();
-      }
-    } catch(e) { console.error(e); }
-    if (attempts >= maxAttempts) stopOrderPolling(orderId);
-  }, intervalSec*1000);
-  pollingHandles[orderId] = handle;
-}
-
-function stopOrderPolling(orderId) {
-  const h = pollingHandles[orderId];
-  if (h) { clearInterval(h); delete pollingHandles[orderId]; }
 }
 
 async function checkOrderStatus(orderId) {
@@ -306,9 +271,7 @@ async function deleteOrder(orderId) {
 /* Reinicia el flujo para una nueva compra */
 async function resetForNewPurchase() {
   if (CURRENT_ORDER) {
-    stopOrderPolling(CURRENT_ORDER.id);
     if (alertedOrders[CURRENT_ORDER.id]) delete alertedOrders[CURRENT_ORDER.id];
-
     await deleteOrder(CURRENT_ORDER.id);
   }
 
@@ -342,7 +305,6 @@ async function clearCart() {
   if (hasActivePendingOrder()) {
     showToast('No podés limpiar el carrito con una orden pendiente. Eliminando deuda...', 'info');
     await deleteOrder(CURRENT_ORDER.id);
-    stopOrderPolling(CURRENT_ORDER?.id);
     if (alertedOrders[CURRENT_ORDER?.id]) delete alertedOrders[CURRENT_ORDER.id];
     CURRENT_ORDER = null;
   }
@@ -367,7 +329,8 @@ updateCartUI();
 function showPayment(paymentUrl){
   const modal = document.getElementById('paymentModal');
   const frame = document.getElementById('paymentFrame');
-  frame.src = paymentUrl;
+  frame.src = '';
+  requestAnimationFrame(()=>{ frame.src = paymentUrl; });
   modal.style.display = 'block';
 }
 

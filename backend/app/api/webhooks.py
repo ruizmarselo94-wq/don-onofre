@@ -2,7 +2,6 @@
 from fastapi import APIRouter, Request, Depends, HTTPException
 from sqlalchemy.orm import Session
 from app.db.crud import SessionLocal, update_order_status
-# Si implementás logs de eventos: from app.db.crud import save_payment_event
 
 router = APIRouter()
 
@@ -20,33 +19,26 @@ async def adams_webhook(request: Request, db: Session = Depends(get_db)):
     except Exception:
         raise HTTPException(status_code=400, detail="Payload inválido")
 
-    # Ejemplo de payload esperado (coincide con tu código viejo):
-    # { "docId": "order-123", "status": "paid", ... }
     doc_id = payload.get("docId")
-    status = payload.get("status")  # 'paid', 'pending', 'refunded', etc.
+    status = payload.get("status")
 
     if not doc_id:
         raise HTTPException(status_code=400, detail="docId ausente")
 
-    # Idempotencia simple: si tenés tabla de eventos, guardá y evita reprocesar duplicados.
-    # save_payment_event(db, doc_id, payload)
-
-    # Nunca llamar a AdamsPay desde el webhook. Solo reflejar estado local.
     try:
-        # extraer order_id de "order-<id>"
-        if not doc_id.startswith("order-"):
+        parts = str(doc_id).split("-")
+        # acepta "order-<id>" o "order-<id>-<ts>"
+        if len(parts) < 2 or parts[0] != "order" or not parts[1].isdigit():
             raise ValueError("docId inválido")
-        order_id = int(doc_id.split("-", 1)[1])
+        order_id = int(parts[1])
 
-        # Mapear estados: si status == 'paid' → orden 'paid'; si 'refunded' → 'devuelta', etc.
         if status == "paid":
             update_order_status(db, order_id, "paid")
         elif status == "refunded":
             update_order_status(db, order_id, "devuelta")
         elif status in ("expired", "deleted", "cancelled"):
             update_order_status(db, order_id, "cancelled")
-        # Si vienen otros estados, podés ignorarlos o registrarlos.
-
+        # otros estados: ignorar o loguear
     except Exception as e:
         raise HTTPException(status_code=400, detail=str(e))
 
