@@ -131,7 +131,11 @@ header .header-subtext{
 .qty-input::-webkit-inner-spin-button{
   -webkit-appearance:none; margin:0;
 }
-.qty-input[type=number]{ -moz-appearance:textfield; }
+/* ✅ agrega estándar 'appearance' + vendor para Firefox */
+.qty-input[type=number]{
+  appearance: textfield;
+  -moz-appearance: textfield;
+}
 
 /* BOTONES */
 .btn{
