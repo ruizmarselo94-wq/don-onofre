@@ -43,7 +43,7 @@
             <div><strong>Estado:</strong> <span id="orderStatus">—</span></div>
 
             <div style="grid-column: 1 / -1; margin-top:8px; display:flex; gap:8px; flex-wrap:wrap;">
-              <a id="paymentLink" href="#" target="_blank" class="btn btn-primary" style="display:none">Ir a pagar</a>
+              <a id="paymentLink" href="#" class="btn btn-primary" style="display:none">Ir a pagar</a>
               <button id="btnCheck" class="btn btn-outline" style="display:none">Verificar estado</button>
               <button id="btnNew" class="btn btn-outline" style="display:none">Nueva compra</button>
             </div>
@@ -69,15 +69,14 @@
     Implementación de prueba — Don Onofre. Usar el cliente con customer_id = 1 (demo).
   </footer>
 
-  <!-- Modal de pago -->
+  <!-- Modal de pago (sin botón de cierre) -->
   <div id="paymentModal">
     <div>
       <iframe id="paymentFrame"></iframe>
-      <button id="closePaymentModal">Cerrar</button>
     </div>
   </div>
 
-  <script src="/app.js?v=20251026a" defer></script>
+  <script src="/app.js?v=20251026b" defer></script>
 </body>
 
 </html>
