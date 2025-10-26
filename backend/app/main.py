@@ -14,27 +14,31 @@ app.include_router(orders.router)
 app.include_router(payments.router)
 app.include_router(webhooks.router)
 
-# CORS
+# --- CORS para frontend ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=["*"],  # Podés limitar a tu frontend real
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Rutas del frontend
-BASE_DIR = pathlib.Path(__file__).resolve().parents[2]     # .../don-onofre
+# directorio base del proyecto (sube 2 niveles) y frontend en la raíz del repo
+BASE_DIR = pathlib.Path(__file__).resolve().parents[2]   # backend/app -> don-onofre
 FRONTEND_DIR = BASE_DIR / "frontend"
 
-# ✅ CORRECCIÓN: montar /static a frontend/static
-app.mount("/static", StaticFiles(directory=FRONTEND_DIR / "static"), name="static")
+# montar archivos estáticos en /static (styles.css, app.js, etc.)
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 
-# Raíz -> index.html
+# --- Dependencia para DB ---
+def get_db():
+    db = crud.SessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# --- Raíz ---
 @app.get("/", include_in_schema=False)
 def root():
-    index_path = FRONTEND_DIR / "index.html"
-    if not index_path.exists():
-        # Mensaje claro en prod si falta el archivo en el deploy
-        raise HTTPException(status_code=404, detail="index.html no encontrado")
-    return FileResponse(index_path)
+    return FileResponse(FRONTEND_DIR / "index.html")
