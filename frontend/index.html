@@ -14,6 +14,11 @@
     <div class="muted header-subtext">API: FastAPI · AdamsPay (simulador)</div>
   </header>
 
+  <!-- Banner de resultado (muestra al volver del pago) -->
+  <div id="resultBar" class="result-bar hidden">
+    <span id="resultBarMsg">—</span>
+  </div>
+
   <main class="wrap">
     <!-- Vista de catálogo + carrito (pre-orden) -->
     <section class="catalog-view" id="catalogView">
@@ -69,10 +74,6 @@
             <div id="ckOrderTotal" class="ticket-total__amount">—</div>
           </div>
         </div>
-
-        <div class="checkout-actions">
-          <button id="btnBackToShop" class="btn btn-outline">Nueva compra</button>
-        </div>
       </div>
 
       <!-- Columna derecha: Pasarela de pago embebida -->
@@ -80,16 +81,9 @@
         <div class="pay-card">
           <div class="pay-card__header">
             <h3>Pago seguro</h3>
-            <div class="pay-actions">
-              <button id="btnCheck" class="btn btn-outline" style="display:none">Verificar estado</button>
-              <a id="paymentExternal" href="#" target="_blank" rel="noopener" class="btn btn-primary" style="display:none">Abrir en pestaña</a>
-            </div>
           </div>
           <div class="pay-frame-wrapper">
             <iframe id="paymentFrameInline" title="AdamsPay"></iframe>
-          </div>
-          <div class="pay-hints muted small">
-            Si el banco abre verificación en otra pestaña, podés usar “Verificar estado”. “Abrir en pestaña” es un plan B si el iframe está bloqueado.
           </div>
         </div>
       </div>
@@ -100,6 +94,6 @@
     Implementación de prueba — Don Onofre. Usar el cliente con customer_id = 1 (demo).
   </footer>
 
-  <script src="/app.js?v=20251026-flow" defer></script>
+  <script src="/app.js?v=20251026-return" defer></script>
 </body>
 </html>
