@@ -14,11 +14,6 @@
     <div class="muted header-subtext">API: FastAPI · AdamsPay (simulador)</div>
   </header>
 
-  <!-- Banner de resultado (muestra al volver del pago) -->
-  <div id="resultBar" class="result-bar hidden" role="status" aria-live="polite">
-    <span id="resultBarMsg">—</span>
-  </div>
-
   <main class="wrap">
     <!-- Vista de catálogo + carrito (pre-orden) -->
     <section class="catalog-view" id="catalogView">
@@ -57,7 +52,7 @@
       </aside>
     </section>
 
-    <!-- Workspace de Pago (post-orden, sin modales) -->
+    <!-- Workspace de Pago (post-orden, sin modales del navegador) -->
     <section id="checkoutWorkspace" class="checkout hidden">
       <!-- Columna izquierda: Ticket / Resumen -->
       <div class="checkout-left">
@@ -90,10 +85,21 @@
     </section>
   </main>
 
+  <!-- Modal ligero de resultado en checkout -->
+  <div id="resultModal" class="result-modal hidden" role="dialog" aria-modal="true" aria-labelledby="resultTitle">
+    <div class="result-modal__panel">
+      <h3 id="resultTitle">—</h3>
+      <p id="resultText" class="muted">—</p>
+      <div class="result-modal__actions">
+        <button id="btnGoHome" class="btn btn-primary">Ir al inicio</button>
+      </div>
+    </div>
+  </div>
+
   <footer>
     Implementación de prueba — Don Onofre. Usar el cliente con customer_id = 1 (demo).
   </footer>
 
-  <script src="/app.js?v=20251026-return2" defer></script>
+  <script src="/app.js?v=20251027-result-in-checkout" defer></script>
 </body>
 </html>

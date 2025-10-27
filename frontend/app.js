@@ -31,18 +31,7 @@ function showToast(msg, type='info', duration=3500){
   setTimeout(()=>{ toast.classList.remove('show'); setTimeout(()=>toast.remove(), 300); }, duration);
 }
 
-/* -------- Banner resultado -------- */
-function showResultBar(text, type='info', ms=4000){
-  const bar = document.getElementById('resultBar');
-  const msg = document.getElementById('resultBarMsg');
-  if (!bar || !msg) return;
-  msg.textContent = text;
-  bar.classList.remove('hidden','success','error','info');
-  bar.classList.add(type);
-  setTimeout(()=>bar.classList.add('hidden'), ms);
-}
-
-/* -------- Utilidades de transición -------- */
+/* -------- Transición entre vistas -------- */
 function transitionTo(showId, hideId){
   const showEl = document.getElementById(showId);
   const hideEl = document.getElementById(hideId);
@@ -66,6 +55,34 @@ function transitionTo(showId, hideId){
       showEl.classList.remove('fade-in');
     });
   }
+}
+
+/* -------- Modal ligero en checkout -------- */
+function showCheckoutResult(status){
+  const modal = document.getElementById('resultModal');
+  const title = document.getElementById('resultTitle');
+  const text  = document.getElementById('resultText');
+  const btn   = document.getElementById('btnGoHome');
+
+  const isPaid = status === 'paid';
+  title.textContent = isPaid ? '¡Gracias por tu compra!' :
+                      status === 'cancelled' ? 'Pago cancelado' :
+                      status === 'error' ? 'Ocurrió un error' : `Estado: ${status}`;
+  text.textContent  = isPaid ? 'El pago fue confirmado.' :
+                      status === 'cancelled' ? 'La deuda fue anulada correctamente.' :
+                      status === 'error' ? 'No pudimos completar el pago.' :
+                      'Volvemos al inicio.';
+
+  modal.classList.remove('hidden');
+
+  const goHome = async () => {
+    modal.classList.add('hidden');
+    await resetForNewPurchase();
+  };
+  btn.onclick = goHome;
+
+  // Autoredirección breve (2.5s)
+  setTimeout(goHome, 2500);
 }
 
 /* -------- Productos -------- */
@@ -209,8 +226,6 @@ async function createOrder() {
     const data = await res.json();
 
     CURRENT_ORDER = { id: data.order_id, status: 'pending' };
-    localStorage.setItem('last_order_id', String(data.order_id));
-
     ORDER_ITEMS_SNAPSHOT = CART.map(i => ({ ...i })); // congelar
     enterCheckout(data.order_id, data.payment_url);
   } catch(err) {
@@ -292,7 +307,6 @@ async function cancelOrderAndMark(orderId){
       headers:{'Content-Type':'application/json'}
     });
     if (!res.ok){
-      // si ya estaba eliminada o pagada, lo dejamos pasar
       try{
         const j = await res.json();
         const d = (j && j.detail || '').toString().toLowerCase();
@@ -307,7 +321,7 @@ async function cancelOrderAndMark(orderId){
   }
 }
 
-/* Reinicia el flujo para una nueva compra (usado al volver del pago) */
+/* Reinicia el flujo para una nueva compra (volver a catálogo) */
 async function resetForNewPurchase() {
   CURRENT_ORDER = null;
   CART = [];
@@ -336,9 +350,11 @@ async function clearCart() {
   setAddButtonsEnabled(true);
 }
 
-/* -------- Pago embebido (iframe) con retorno same-origin + polling --------
-   - Si el iframe vuelve a tu origin y el estado NO es "paid", cancelamos la deuda
-     inmediatamente y redirigimos al home con banner "cancelled".
+/* -------- Pago embebido (iframe) con retorno + polling --------
+   - Si vuelve same-origin:
+       * Si no es "paid": cancelar deuda, actualizar badge y mostrar modal.
+       * Si es "paid": actualizar badge y mostrar modal de éxito.
+   - Plan B con polling durante 3 min.
 ---------------------------------------------------------------- */
 function showPaymentInline(paymentUrl, orderId){
   const frame = document.getElementById('paymentFrameInline');
@@ -357,14 +373,21 @@ function showPaymentInline(paymentUrl, orderId){
       const sameOrigin = origin === window.location.origin;
       if (sameOrigin) {
         let status = await checkOrderStatus(orderId);
+
         if (status !== 'paid') {
           // cancelar de inmediato para no dejar deuda colgando
           const res = await cancelOrderAndMark(orderId);
           status = res || status || 'cancelled';
         }
-        sessionStorage.setItem('payment_result', JSON.stringify({ orderId, status }));
-        window.location.replace(window.location.origin + '/');
-        return;
+
+        // reflejo en ticket y feedback local
+        updateStatusBadge(status);
+        showToast(status === 'paid' ? 'Orden pagada ✅' :
+                  status === 'cancelled' ? 'Pago cancelado. Deuda anulada.' :
+                  'No se completó el pago.', status === 'paid' ? 'success' : (status === 'cancelled' ? 'info' : 'error'));
+
+        // modal y autoredirección a catálogo limpio
+        showCheckoutResult(status);
       }
     } catch (_) {
       // Primer load (cross-origin): nada.
@@ -381,13 +404,16 @@ function showPaymentInline(paymentUrl, orderId){
     try {
       let status = await checkOrderStatus(orderId);
       if (['paid','cancelled','error'].includes(status)) {
-        // si no es paid, aseguramos cancelación en backend
         if (status !== 'paid') {
           const res = await cancelOrderAndMark(orderId);
           status = res || status;
         }
-        sessionStorage.setItem('payment_result', JSON.stringify({ orderId, status }));
-        window.location.replace(window.location.origin + '/');
+        updateStatusBadge(status);
+        showToast(status === 'paid' ? 'Orden pagada ✅' :
+                  status === 'cancelled' ? 'Pago cancelado. Deuda anulada.' :
+                  'No se completó el pago.', status === 'paid' ? 'success' : (status === 'cancelled' ? 'info' : 'error'));
+        showCheckoutResult(status);
+        stopInlinePolling(frame);
       }
       if (Date.now() > deadline) stopInlinePolling(frame);
     } catch { /* silencioso */ }
@@ -420,30 +446,11 @@ function formatMoney(n){
 }
 function escapeHtml(s){ return String(s).replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'})[m]); }
 
-/* -------- On load: botones y retorno de pago -------- */
+/* -------- Init -------- */
 document.getElementById('btnCheckout').addEventListener('click', createOrder);
 document.getElementById('btnClear').addEventListener('click', () => { clearCart(); if (!hasActivePendingOrder()) setAddButtonsEnabled(true); });
 
 (async function init(){
-  // Si venimos de Url de retorno, mostramos banner y dejamos nuevo flujo listo
-  const pr = sessionStorage.getItem('payment_result');
-  if (pr) {
-    try {
-      const { orderId, status } = JSON.parse(pr);
-      const text = status === 'paid'
-        ? `¡Pago de la orden #${orderId} confirmado!`
-        : status === 'cancelled'
-          ? `Pago de la orden #${orderId} cancelado.`
-          : status === 'error'
-            ? `Hubo un error con la orden #${orderId}.`
-            : `Estado de la orden #${orderId}: ${status}`;
-      showResultBar(text, status === 'paid' ? 'success' : (status === 'error' ? 'error' : 'info'));
-    } catch {}
-    sessionStorage.removeItem('payment_result');
-    await resetForNewPurchase();
-    localStorage.removeItem('last_order_id');
-  }
-
   await fetchProducts();
   updateCartUI();
 })();
