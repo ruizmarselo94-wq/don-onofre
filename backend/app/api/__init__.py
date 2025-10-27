@@ -1,1 +1,1 @@
-from . import products, orders, payments, webhooks
+from . import products, orders, webhooks

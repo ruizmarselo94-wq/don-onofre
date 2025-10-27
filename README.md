@@ -32,4 +32,3 @@ Documentación API: [http://127.0.0.1:8000/docs](http://127.0.0.1:8000/docs)
 - POST /api/orders
 - GET /api/orders/{id}
 - POST /api/payments/create
-- POST /api/payments/webhook
