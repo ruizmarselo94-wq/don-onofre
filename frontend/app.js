@@ -39,8 +39,33 @@ function showResultBar(text, type='info', ms=4000){
   msg.textContent = text;
   bar.classList.remove('hidden','success','error','info');
   bar.classList.add(type);
-  // autohide
   setTimeout(()=>bar.classList.add('hidden'), ms);
+}
+
+/* -------- Utilidades de transición -------- */
+function transitionTo(showId, hideId){
+  const showEl = document.getElementById(showId);
+  const hideEl = document.getElementById(hideId);
+  if (hideEl && !hideEl.classList.contains('hidden')) {
+    hideEl.classList.remove('fade-in'); hideEl.classList.add('fade-out');
+    hideEl.addEventListener('animationend', function onEnd(){
+      hideEl.removeEventListener('animationend', onEnd);
+      hideEl.classList.add('hidden'); hideEl.classList.remove('fade-out');
+      if (showEl){
+        showEl.classList.remove('hidden'); showEl.classList.add('fade-in');
+        showEl.addEventListener('animationend', function onEnd2(){
+          showEl.removeEventListener('animationend', onEnd2);
+          showEl.classList.remove('fade-in');
+        });
+      }
+    });
+  } else if (showEl){
+    showEl.classList.remove('hidden'); showEl.classList.add('fade-in');
+    showEl.addEventListener('animationend', function onEnd3(){
+      showEl.removeEventListener('animationend', onEnd3);
+      showEl.classList.remove('fade-in');
+    });
+  }
 }
 
 /* -------- Productos -------- */
@@ -184,7 +209,6 @@ async function createOrder() {
     const data = await res.json();
 
     CURRENT_ORDER = { id: data.order_id, status: 'pending' };
-    // guardo para poder resolver al volver por Url de retorno
     localStorage.setItem('last_order_id', String(data.order_id));
 
     ORDER_ITEMS_SNAPSHOT = CART.map(i => ({ ...i })); // congelar
@@ -197,16 +221,12 @@ async function createOrder() {
 
 /* Entra al workspace de pago y arma ambas columnas */
 function enterCheckout(orderId, paymentUrl) {
-  // Ocultar catálogo + carrito, mostrar checkout
-  document.getElementById('catalogView').classList.add('hidden');
-  const ws = document.getElementById('checkoutWorkspace');
-  ws.classList.remove('hidden');
+  transitionTo('checkoutWorkspace','catalogView');
 
   // Render ticket
   document.getElementById('ckOrderId').textContent = orderId;
   document.getElementById('ckOrderTotal').textContent = formatMoney(calcSnapshotTotal());
   updateStatusBadge('pending');
-
   renderTicketItems();
 
   // Bloquear edición del carrito
@@ -264,40 +284,36 @@ async function checkOrderStatus(orderId) {
   }
 }
 
-/* Eliminar deuda en AdamsPay (para cancelar pendientes al salir) */
-async function deleteOrder(orderId) {
-  if (!orderId) return;
-  try {
+/* Eliminar deuda en AdamsPay (cancelación inmediata) */
+async function cancelOrderAndMark(orderId){
+  try{
     const res = await fetch(`${API_BASE}/orders/${orderId}`, {
-      method: 'DELETE',
-      headers: { 'Content-Type': 'application/json' }
+      method:'DELETE',
+      headers:{'Content-Type':'application/json'}
     });
-    if (!res.ok) {
-      let detail = null;
-      try { detail = (await res.json()).detail; } catch {}
-      if (res.status === 404 || (res.status === 400 && typeof detail === 'string' && detail.toLowerCase().includes('orden pagada'))) {
-        console.warn('deleteOrder silenciado:', res.status, detail);
-        return;
-      }
-      throw new Error(detail || `HTTP ${res.status}`);
+    if (!res.ok){
+      // si ya estaba eliminada o pagada, lo dejamos pasar
+      try{
+        const j = await res.json();
+        const d = (j && j.detail || '').toString().toLowerCase();
+        if (res.status===404 || (res.status===400 && (d.includes('pagada') || d.includes('paid')))) return 'paid';
+      }catch{}
+      return null;
     }
-    await res.json();
-    showToast('Deuda eliminada correctamente', 'success');
-  } catch(err) {
-    console.error('Error eliminando deuda:', err);
-    showToast('Error eliminando deuda: '+err.message, 'error');
+    return 'cancelled';
+  }catch(e){
+    console.warn('cancelOrderAndMark:', e);
+    return null;
   }
 }
 
-/* Reinicia el flujo para una nueva compra (usado internamente tras volver del pago) */
+/* Reinicia el flujo para una nueva compra (usado al volver del pago) */
 async function resetForNewPurchase() {
   CURRENT_ORDER = null;
   CART = [];
   ORDER_ITEMS_SNAPSHOT = [];
 
-  // UI
-  document.getElementById('checkoutWorkspace').classList.add('hidden');
-  document.getElementById('catalogView').classList.remove('hidden');
+  transitionTo('catalogView','checkoutWorkspace');
 
   const frame = document.getElementById('paymentFrameInline');
   stopInlinePolling(frame);
@@ -311,7 +327,7 @@ async function resetForNewPurchase() {
 async function clearCart() {
   if (hasActivePendingOrder()) {
     showToast('No podés limpiar el carrito con una orden pendiente. Eliminando deuda...', 'info');
-    try { await deleteOrder(CURRENT_ORDER.id); } catch {}
+    try { await cancelOrderAndMark(CURRENT_ORDER.id); } catch {}
     if (alertedOrders[CURRENT_ORDER?.id]) delete alertedOrders[CURRENT_ORDER.id];
     CURRENT_ORDER = null;
   }
@@ -321,8 +337,8 @@ async function clearCart() {
 }
 
 /* -------- Pago embebido (iframe) con retorno same-origin + polling --------
-   - Si el iframe vuelve a la misma origin (Url de retorno), redirigimos la página
-     completa al inicio y mostramos un banner con el resultado real (consultando API).
+   - Si el iframe vuelve a tu origin y el estado NO es "paid", cancelamos la deuda
+     inmediatamente y redirigimos al home con banner "cancelled".
 ---------------------------------------------------------------- */
 function showPaymentInline(paymentUrl, orderId){
   const frame = document.getElementById('paymentFrameInline');
@@ -337,34 +353,39 @@ function showPaymentInline(paymentUrl, orderId){
   // Handler de retorno same-origin
   frame._onLoadHandler = async () => {
     try {
-      const origin = frame.contentWindow.location.origin; // cross-origin lanza excepción si aún está en AdamsPay
+      const origin = frame.contentWindow.location.origin; // lanza si sigue en AdamsPay
       const sameOrigin = origin === window.location.origin;
       if (sameOrigin) {
-        // ya estás en tu dominio dentro del iframe → resolvemos estado y redireccionamos la app completa
-        const status = await checkOrderStatus(orderId);
-        // guardamos resultado temporal en sessionStorage para mostrar banner en el home
-        if (status) {
-          sessionStorage.setItem('payment_result', JSON.stringify({ orderId, status }));
+        let status = await checkOrderStatus(orderId);
+        if (status !== 'paid') {
+          // cancelar de inmediato para no dejar deuda colgando
+          const res = await cancelOrderAndMark(orderId);
+          status = res || status || 'cancelled';
         }
-        // redirige al home (nuevo flujo limpio)
+        sessionStorage.setItem('payment_result', JSON.stringify({ orderId, status }));
         window.location.replace(window.location.origin + '/');
         return;
       }
     } catch (_) {
-      // Primer load (cross-origin): no pasa nada; seguimos.
+      // Primer load (cross-origin): nada.
     }
   };
   frame.addEventListener('load', frame._onLoadHandler);
 
-  // Polling por si el PSP no vuelve por iframe (3 min máx)
+  // Polling (plan B) por 3 min máx
   const POLL_MS = 1500;
   const MAX_MS = 3 * 60 * 1000;
   const deadline = Date.now() + MAX_MS;
 
   frame._statusPoll = setInterval(async () => {
     try {
-      const status = await checkOrderStatus(orderId);
+      let status = await checkOrderStatus(orderId);
       if (['paid','cancelled','error'].includes(status)) {
+        // si no es paid, aseguramos cancelación en backend
+        if (status !== 'paid') {
+          const res = await cancelOrderAndMark(orderId);
+          status = res || status;
+        }
         sessionStorage.setItem('payment_result', JSON.stringify({ orderId, status }));
         window.location.replace(window.location.origin + '/');
       }
@@ -404,7 +425,7 @@ document.getElementById('btnCheckout').addEventListener('click', createOrder);
 document.getElementById('btnClear').addEventListener('click', () => { clearCart(); if (!hasActivePendingOrder()) setAddButtonsEnabled(true); });
 
 (async function init(){
-  // Si venimos de Url de retorno y el backend no redirigió, mostramos banner según sessionStorage
+  // Si venimos de Url de retorno, mostramos banner y dejamos nuevo flujo listo
   const pr = sessionStorage.getItem('payment_result');
   if (pr) {
     try {
@@ -419,9 +440,7 @@ document.getElementById('btnClear').addEventListener('click', () => { clearCart(
       showResultBar(text, status === 'paid' ? 'success' : (status === 'error' ? 'error' : 'info'));
     } catch {}
     sessionStorage.removeItem('payment_result');
-    // limpiar estado local para nuevo flujo
     await resetForNewPurchase();
-    // además olvidar referencia de última orden
     localStorage.removeItem('last_order_id');
   }
 

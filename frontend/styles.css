@@ -112,7 +112,7 @@ header .header-subtext{
   display:flex; gap:8px; align-items:center;
 }
 .qty-input{
-  width:72px;
+  width:80px;
   padding:8px 10px;
   border:1px solid #dfe3e8;
   border-radius:6px;
@@ -126,16 +126,7 @@ header .header-subtext{
   border-color:#93c5fd;
   box-shadow:0 0 0 3px rgba(147,197,253,.35);
 }
-/* quitar spinners */
-.qty-input::-webkit-outer-spin-button,
-.qty-input::-webkit-inner-spin-button{
-  -webkit-appearance:none; margin:0;
-}
-/* ✅ agrega estándar 'appearance' + vendor para Firefox */
-.qty-input[type=number]{
-  appearance: textfield;
-  -moz-appearance: textfield;
-}
+/* spinners nativos visibles: no forzamos appearance */
 
 /* BOTONES */
 .btn{
@@ -174,6 +165,19 @@ aside.cart{
   border-radius: 8px;
   box-shadow:0 1px 3px rgba(0,0,0,0.06);
   overflow:hidden;
+}
+
+/* Cabeceras unificadas (ticket y pago) */
+.card-header{
+  padding:12px 14px;
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  background:#f8fafc;
+  border-bottom:1px solid #eef2f7;
+}
+.card-header h3{
+  margin:0; font-size:18px; line-height:1.2;
 }
 
 /* CART HEADER */
@@ -323,18 +327,6 @@ aside.cart{
   box-shadow:0 1px 4px rgba(0,0,0,0.08);
   overflow:hidden;
 }
-.ticket-card__header{
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  padding:12px 14px;
-  background:#f8fafc;
-  border-bottom:1px solid #eef2f7;
-}
-.ticket-card__header h3{
-  margin:0;
-  font-size:18px;
-}
 .ticket-items{
   display:flex;
   flex-direction:column;
@@ -371,14 +363,6 @@ aside.cart{
   display:flex;
   flex-direction:column;
 }
-.pay-card__header{
-  padding:12px 14px;
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  background:#f8fafc;
-  border-bottom:1px solid #eef2f7;
-}
 .pay-frame-wrapper{
   width:100%;
   height:65vh;
@@ -389,6 +373,18 @@ aside.cart{
   width:100%;
   height:100%;
   border:0;
+}
+
+/* TRANSICIONES entre vistas */
+.fade-in{ animation: fadeInUp .24s ease both; }
+.fade-out{ animation: fadeOutDown .18s ease both; }
+@keyframes fadeInUp{
+  from{ opacity:0; transform: translateY(6px); }
+  to{ opacity:1; transform: translateY(0); }
+}
+@keyframes fadeOutDown{
+  from{ opacity:1; transform: translateY(0); }
+  to{ opacity:0; transform: translateY(6px); }
 }
 
 /* FOOTER */
