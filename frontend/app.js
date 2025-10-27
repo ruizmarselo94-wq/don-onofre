@@ -60,29 +60,37 @@ function transitionTo(showId, hideId){
 /* -------- Modal ligero en checkout -------- */
 function showCheckoutResult(status){
   const modal = document.getElementById('resultModal');
+  const panel = modal?.querySelector('.result-modal__panel');
   const title = document.getElementById('resultTitle');
   const text  = document.getElementById('resultText');
-  const btn   = document.getElementById('btnGoHome');
 
-  const isPaid = status === 'paid';
-  title.textContent = isPaid ? '¡Gracias por tu compra!' :
+  const cls = status === 'paid' ? 'success' :
+              status === 'cancelled' ? 'info' :
+              status === 'error' ? 'error' : 'info';
+
+  // Limpia clases previas y aplica la actual
+  if (panel){
+    panel.classList.remove('success','info','error');
+    panel.classList.add(cls);
+  }
+
+  title.textContent = status === 'paid'      ? '¡Gracias por tu compra!' :
                       status === 'cancelled' ? 'Pago cancelado' :
-                      status === 'error' ? 'Ocurrió un error' : `Estado: ${status}`;
-  text.textContent  = isPaid ? 'El pago fue confirmado.' :
+                      status === 'error'     ? 'Ocurrió un error' :
+                                               `Estado: ${status}`;
+
+  text.textContent  = status === 'paid'      ? 'El pago fue confirmado.' :
                       status === 'cancelled' ? 'La deuda fue anulada correctamente.' :
-                      status === 'error' ? 'No pudimos completar el pago.' :
-                      'Volvemos al inicio.';
+                      status === 'error'     ? 'No pudimos completar el pago.' :
+                                               'Volvemos al inicio.';
 
   modal.classList.remove('hidden');
 
-  const goHome = async () => {
+  // Cierre automático hacia un nuevo flujo limpio (2.4s)
+  setTimeout(async () => {
     modal.classList.add('hidden');
     await resetForNewPurchase();
-  };
-  btn.onclick = goHome;
-
-  // Autoredirección breve (2.5s)
-  setTimeout(goHome, 2500);
+  }, 2400);
 }
 
 /* -------- Productos -------- */
