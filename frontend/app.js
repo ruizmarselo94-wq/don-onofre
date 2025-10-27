@@ -63,6 +63,7 @@ function showCheckoutResult(status){
   const panel = modal?.querySelector('.result-modal__panel');
   const title = document.getElementById('resultTitle');
   const text  = document.getElementById('resultText');
+  const goHomeLink = document.getElementById('linkGoHome');
 
   const cls = status === 'paid' ? 'success' :
               status === 'cancelled' ? 'info' :
@@ -79,10 +80,20 @@ function showCheckoutResult(status){
                       status === 'error'     ? 'Ocurrió un error' :
                                                `Estado: ${status}`;
 
+  // Texto con buen contraste (el CSS ya fuerza color blanco)
   text.textContent  = status === 'paid'      ? 'El pago fue confirmado.' :
                       status === 'cancelled' ? 'La deuda fue anulada correctamente.' :
                       status === 'error'     ? 'No pudimos completar el pago.' :
                                                'Volvemos al inicio.';
+
+  // Enlace "Ir al inicio" que ejecuta el mismo flujo de limpiado
+  if (goHomeLink){
+    goHomeLink.onclick = async (e) => {
+      e.preventDefault();
+      modal.classList.add('hidden');
+      await resetForNewPurchase();
+    };
+  }
 
   modal.classList.remove('hidden');
 
